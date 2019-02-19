@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using Blog.Core.IRepository;
 using Blog.Core.IServices;
 using Blog.Core.Model.Models;
-using Blog.Core.Repository;
 using Blog.Core.Services.BASE;
 
 namespace Blog.Core.Services
@@ -19,6 +18,15 @@ namespace Blog.Core.Services
         {
             this.dal = dal;
             base.baseDal = dal;
+        }
+
+        public void ReturnExp()
+        {
+
+            int a = 1;
+            int b = 0;
+
+            int c = a / b;
         }
 
         //public IAdvertisementRepository dal = new AdvertisementRepository();

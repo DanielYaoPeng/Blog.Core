@@ -2,8 +2,12 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using AutoMapper;
+using Blog.Core.IServices;
 using Blog.Core.Model;
+using Blog.Core.Model.Models;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Blog.Core.Controllers
@@ -13,18 +17,52 @@ namespace Blog.Core.Controllers
     /// </summary>
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Roles = "Admin")]
+    //[Authorize]
+    //[Authorize(Roles = "Admin,Client")]
+    //[Authorize(Policy = "SystemOrAdmin")]
+    [Authorize("Permission")]
     public class ValuesController : ControllerBase
     {
+        private IMapper _mapper;
+        private IAdvertisementServices _advertisementServices;
+        private Love _love;
+        IRoleModulePermissionServices _roleModulePermissionServices;
+
+        /// <summary>
+        /// ValuesController
+        /// </summary>
+        /// <param name="mapper"></param>
+        /// <param name="advertisementServices"></param>
+        /// <param name="love"></param>
+        /// <param name="roleModulePermissionServices"></param>
+        public ValuesController(IMapper mapper, IAdvertisementServices advertisementServices, Love love, IRoleModulePermissionServices roleModulePermissionServices)
+        {
+            // 测试 Authorize 和 mapper
+            _mapper = mapper;
+            _advertisementServices = advertisementServices;
+            _love = love;
+            _roleModulePermissionServices = roleModulePermissionServices;
+        }
         /// <summary>
         /// Get方法
         /// </summary>
         /// <returns></returns>
         // GET api/values
         [HttpGet]
-        public ActionResult<IEnumerable<string>> Get()
+        [AllowAnonymous]
+        public async Task<MessageModel<ResponseEnum>> Get()
         {
-            return new string[] { "value1", "value2" };
+            var data = new MessageModel<ResponseEnum>();
+
+            var list = await _roleModulePermissionServices.TestModelWithChildren();
+
+
+            _advertisementServices.ReturnExp();
+
+            Love love = null;
+            love.SayLoveU();
+
+            return data;
         }
         /// <summary>
         /// Get(int id)方法
@@ -33,17 +71,22 @@ namespace Blog.Core.Controllers
         /// <returns></returns>
         // GET api/values/5
         [HttpGet("{id}")]
+        [AllowAnonymous]
         public ActionResult<string> Get(int id)
         {
+            var loveu = _love.SayLoveU();
+
             return "value";
         }
-       /// <summary>
-       /// post
-       /// </summary>
-       /// <param name="love">model实体类参数</param>
+        /// <summary>
+        /// post
+        /// </summary>
+        /// <param name="blogArticle">model实体类参数</param>
         [HttpPost]
-        public void Post(Love love)
+        [AllowAnonymous]
+        public object Post([FromBody]  BlogArticle blogArticle)
         {
+            return Ok(new { success = true, data = blogArticle });
         }
         /// <summary>
         /// Put方法

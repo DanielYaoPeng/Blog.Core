@@ -1,8 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using Blog.Core.AuthHelper;
+using Blog.Core.IServices;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -17,10 +21,29 @@ namespace Blog.Core.Controllers
     public class LoginController : Controller
     {
 
+        IsysUserInfoServices sysUserInfoServices;
+        IUserRoleServices userRoleServices;
+        IRoleServices roleServices;
+        PermissionRequirement _requirement;
 
 
+        /// <summary>
+        /// 构造函数注入
+        /// </summary>
+        /// <param name="sysUserInfoServices"></param>
+        /// <param name="userRoleServices"></param>
+        /// <param name="roleServices"></param>
+        /// <param name="requirement"></param>
+        public LoginController(IsysUserInfoServices sysUserInfoServices, IUserRoleServices userRoleServices, IRoleServices roleServices, PermissionRequirement requirement)
+        {
+            this.sysUserInfoServices = sysUserInfoServices;
+            this.userRoleServices = userRoleServices;
+            this.roleServices = roleServices;
+            _requirement = requirement;
+        }
 
-        #region 获取token的第二种方法
+
+        #region 获取token的第1种方法
         /// <summary>
         /// 获取JWT的方法
         /// </summary>
@@ -29,17 +52,20 @@ namespace Blog.Core.Controllers
         /// <returns></returns>
         [HttpGet]
         [Route("Token")]
-        public JsonResult GetJWTStr(string name, string pass)
+        public async Task<object> GetJWTStr(string name, string pass)
         {
             string jwtStr = string.Empty;
             bool suc = false;
             //这里就是用户登陆以后，通过数据库去调取数据，分配权限的操作
             //这里直接写死了
-            if (name == "admins" && pass == "admins")
+
+            var user = await sysUserInfoServices.GetUserRoleNameStr(name, pass);
+            if (user != null)
             {
+
                 TokenModelJWT tokenModel = new TokenModelJWT();
                 tokenModel.Uid = 1;
-                tokenModel.Role = "Admin";
+                tokenModel.Role = user;
 
                 jwtStr = JwtHelper.IssueJWT(tokenModel);
                 suc = true;
@@ -48,13 +74,12 @@ namespace Blog.Core.Controllers
             {
                 jwtStr = "login fail!!!";
             }
-            var result = new
+
+            return Ok(new
             {
-                data = new { success = suc, token = jwtStr }
-            };
-
-
-            return Json(result);
+                success = suc,
+                token = jwtStr
+            });
         }
 
 
@@ -84,11 +109,69 @@ namespace Blog.Core.Controllers
             {
                 data = new { success = suc, token = jwtStr }
             };
-            var data = new { success = suc, data = new { success = suc, token = jwtStr } };
 
-            return data;
+            return Ok(new
+            {
+                success = suc,
+                data = new { success = suc, token = jwtStr }
+            });
         }
         #endregion
+
+
+
+        /// <summary>
+        /// 获取JWT的方法 3.0
+        /// </summary>
+        /// <param name="name"></param>
+        /// <param name="pass"></param>
+        /// <returns></returns>
+        [HttpGet]
+        [Route("JWTToken3.0")]
+        public async Task<object> GetJWTToken3(string name = "", string pass = "")
+        {
+            string jwtStr = string.Empty;
+            bool suc = false;
+
+            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(pass))
+            {
+                return new JsonResult(new
+                {
+                    Status = false,
+                    message = "用户名或密码不能为空"
+                });
+            }
+
+            var user = await sysUserInfoServices.Query(d => d.uLoginName == name && d.uLoginPWD == pass);
+            if (user.Count > 0)
+            {
+                var userRoles = await sysUserInfoServices.GetUserRoleNameStr(name, pass);
+                //如果是基于用户的授权策略，这里要添加用户;如果是基于角色的授权策略，这里要添加角色
+                var claims = new List<Claim> {
+                    new Claim(ClaimTypes.Name, name),
+                    new Claim(JwtRegisteredClaimNames.Jti, user.FirstOrDefault().uID.ToString()),
+                    new Claim(ClaimTypes.Expiration, DateTime.Now.AddSeconds(_requirement.Expiration.TotalSeconds).ToString()) };
+                claims.AddRange(userRoles.Split(',').Select(s => new Claim(ClaimTypes.Role, s)));
+
+                //用户标识
+                var identity = new ClaimsIdentity(JwtBearerDefaults.AuthenticationScheme);
+                identity.AddClaims(claims);
+
+                var token = JwtToken.BuildJwtToken(claims.ToArray(), _requirement);
+                return new JsonResult(token);
+            }
+            else
+            {
+                return new JsonResult(new
+                {
+                    success = false,
+                    message = "认证失败"
+                });
+            }
+
+
+
+        }
 
 
         /// <summary>

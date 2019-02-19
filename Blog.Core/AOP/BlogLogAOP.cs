@@ -1,4 +1,5 @@
 ﻿using Castle.DynamicProxy;
+using StackExchange.Profiling;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -24,8 +25,19 @@ namespace Blog.Core.AOP
                 $"当前执行方法：{ invocation.Method.Name} " +
                 $"参数是： {string.Join(", ", invocation.Arguments.Select(a => (a ?? "").ToString()).ToArray())} \r\n";
 
-            //在被拦截的方法执行完毕后 继续执行当前方法，注意是被拦截的是异步的
-            invocation.Proceed();
+            try
+            {
+                MiniProfiler.Current.Step($"执行Service方法：{invocation.Method.Name}() -> ");
+                //在被拦截的方法执行完毕后 继续执行当前方法，注意是被拦截的是异步的
+                invocation.Proceed();
+            }
+            catch (Exception e)
+            {
+                //执行的 service 中，收录异常
+                MiniProfiler.Current.CustomTiming("Errors：", e.Message);
+                //执行的 service 中，捕获异常
+                dataIntercept += ($"方法执行中出现异常：{e.Message + e.InnerException}");
+            }
 
             dataIntercept += ($"方法执行完毕，返回结果：{invocation.ReturnValue}");
 
@@ -40,7 +52,8 @@ namespace Blog.Core.AOP
 
             StreamWriter sw = File.AppendText(fileName);
             sw.WriteLine(dataIntercept);
-            sw.Close(); 
+            sw.WriteLine();
+            sw.Close();
             #endregion
 
         }
